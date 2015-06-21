@@ -218,82 +218,8 @@ static int detectFeatures(const char* pic_path,const char* annotation_path, Mat 
 *
 *@param [in]  train_pic_path         path of pictures for training
 *@param [in]  annotation_path        path of annotation for training
-*@param [in]  classfication_pic_path path of pictures for predicting
-*@param [in]  predict_anno_path      path of annotation for predicting
-*@param [in]  finename_to_load       path of classifier to load
 *@param [out] filename_to_save       path of classifier to save
 */
-static int svm_classifier(const char* train_pic_path,
-	const char* annotation_path,
-	const char* classfication_pic_path,
-	const char* predict_anno_path,
-	const char* filename_to_save,
-	const char* filename_to_load){
-
-	CvSVM svm;
-	CvSVMParams param;
-	param.kernel_type = CvSVM::LINEAR;
-	param.svm_type = CvSVM::C_SVC;
-	param.C = 1;
-
-	if (filename_to_load){
-		// load classifier from the specified file
-		svm.load(filename_to_load);
-		if (svm.get_var_count() == 0){
-			printf("Could not read the classifier %s\n", filename_to_load);
-			return -1;
-		}
-		printf("The classifier %s is loaded.\n", filename_to_load);
-	}
-	else{
-		if (!train_pic_path || !annotation_path){
-			printf("Don't have a train pictures path or annotation path and path to load classifier\n");
-			help();
-			return -1;
-		}
-		Mat data, responses;
-		detectFeatures(train_pic_path, annotation_path, responses, data);
-		printf("Training the classifier (may take a few minutes)...\\\n");
-		svm.train(data, responses, Mat(), Mat(), param);
-		if (filename_to_save)
-			svm.save(filename_to_save);
-	}
-
-	if (classfication_pic_path && predict_anno_path){
-		printf("Classification (may take a few minutes)...\n");
-
-		//get features
-		Mat classi_data;
-		Mat true_responses;
-		detectFeatures(classfication_pic_path, predict_anno_path, true_responses, classi_data);
-		Mat result(1, true_responses.cols, CV_32S);
-
-		//predict
-		double t = (double)cvGetTickCount();
-		svm.predict(classi_data, result);
-		t = (double)cvGetTickCount() - t;
-		printf("Prediction type: %gms\n", t / (cvGetTickFrequency()*1000.));
-
-		int true_resp = 0;
-		for (int i = 0; i < true_responses.rows; i++){
-			if ((int)result.at<float>(i) == true_responses.at<int>(i))
-				true_resp++;
-		}
-
-#ifdef DEBUG
-		//write result to file
-		FileStorage result_file("result.xml", FileStorage::WRITE);
-		result_file << "result" << result;
-		result_file << "true_responses" << true_responses;
-		result_file << "true_resp" << true_resp;
-		result_file << "classi_data" << classi_data;
-#endif
-		printf("true_resp = %f%%\n%d\n", (float)true_resp / true_responses.rows * 100,true_resp);
-
-	}
-	return 0;
-}
-
 static int svm_classifier(const char* train_pic_path,
 	const char* annotation_path,
 	const char* filename_to_save){
@@ -460,7 +386,6 @@ static int run(int argc, char * argv[]){
 	switch (method)
 	{
 	case 1:
-	//	svm_classifier(train_pic_path, annotation_path, classification_pic_path, predict_anno_path, filename_to_save, filename_to_load);
 		svm_classifier(train_pic_path, annotation_path, filename_to_save);
 		break;
 	case 2:
