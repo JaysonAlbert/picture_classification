@@ -7,6 +7,7 @@
 #include "opencv2/calib3d/calib3d.hpp"
 #include<vector>
 #include<mat.h>
+#include<stdio.h>
 #include<io.h>
 using namespace std;
 using namespace cv;
@@ -138,11 +139,11 @@ static int detectFeatures(const char* pic_path,
 	getFiles(pic_path, files, info);
 	getFiles(annotation_path, anno_files, anno_info);
 
+#ifdef DEBUG
 	for (int i = 0; i < info.size(); i++){
 		printf("num class[%d]: %d\n", i, info[i]);
 	}
-	for (int i = 0; i < files.size(); i++)
-		cout << files[i] << endl;
+#endif
 
 	printf("detecting training picture features (may take a few minutes)...\n");
 	for (int i = 0, j = 0, t = 0; i < files.size(); i++, j++){
@@ -202,21 +203,6 @@ static int detectFeatures(const char* pic_path,
 		pre_data = pre_data.t();
 		normalizecol(pre_data);
 	}
-
-#ifdef DEBUG
-	FileStorage hhh("features.xml", FileStorage::WRITE);
-	hhh << "responses" << responses;
-	hhh << "data" << data;
-	if ((int)factor != 1){
-		hhh << "pre_responses" << pre_responses;
-		hhh << "pre_data" << pre_data;
-	}
-	for (int i = 0; i < info.size(); i++){
-		printf("num class[%d]: %d\n", i, info[i]);
-	}
-		printf("\n\ntrain num: %d\n", data.rows);
-		printf("predict num: %d\n\n", pre_data.rows);
-#endif
 
 	return 0;
 }
@@ -290,7 +276,7 @@ static int svm_classifier(const char* train_pic_path,
 
 		int true_resp = 0;
 		for (int i = 0; i < true_responses.rows; i++){
-			if ((int)result.at<float>(i) == (int)true_responses.at<float>(i))
+			if ((int)result.at<float>(i) == true_responses.at<int>(i))
 				true_resp++;
 		}
 
@@ -302,8 +288,60 @@ static int svm_classifier(const char* train_pic_path,
 		result_file << "true_resp" << true_resp;
 		result_file << "classi_data" << classi_data;
 #endif
-		printf("true_resp = %f%%\n", (float)true_resp / true_responses.rows * 100);
+		printf("true_resp = %f%%\n%d\n", (float)true_resp / true_responses.rows * 100,true_resp);
+
 	}
+	return 0;
+}
+
+static int svm_classifier(const char* train_pic_path,
+	const char* annotation_path,
+	const char* filename_to_save){
+
+	CvSVM svm;
+	CvSVMParams param;
+	param.kernel_type = CvSVM::LINEAR;
+	param.svm_type = CvSVM::C_SVC;
+	param.C = 1;
+
+		if (!train_pic_path || !annotation_path){
+			printf("Don't have a train pictures path or annotation path and path to load classifier\n");
+			help();
+			return -1;
+		}
+		Mat data;
+		Mat responses;
+		Mat classi_data;
+		Mat true_responses;
+		detectFeatures(train_pic_path, annotation_path, responses, data,true_responses,classi_data,0.8);
+		printf("Training the classifier (may take a few minutes)...\\\n");
+		svm.train(data, responses, Mat(), Mat(), param);
+		if (filename_to_save)
+			svm.save(filename_to_save);
+
+		Mat result(1, true_responses.cols, CV_32S);
+
+		//predict
+		double t = (double)cvGetTickCount();
+		svm.predict(classi_data, result);
+		t = (double)cvGetTickCount() - t;
+		printf("Prediction type: %gms\n", t / (cvGetTickFrequency()*1000.));
+
+		int true_resp = 0;
+		for (int i = 0; i < true_responses.rows; i++){
+			if ((int)result.at<float>(i) == true_responses.at<int>(i))
+				true_resp++;
+		}
+
+#ifdef DEBUG
+		//write result to file
+		FileStorage result_file("result.xml", FileStorage::WRITE);
+		result_file << "result" << result;
+		result_file << "true_responses" << true_responses;
+		result_file << "true_resp" << true_resp;
+		result_file << "classi_data" << classi_data;
+#endif
+		printf("true_resp = %f%%\n%d\n", (float)true_resp / true_responses.rows * 100, true_resp);
 	return 0;
 }
 
@@ -422,7 +460,8 @@ static int run(int argc, char * argv[]){
 	switch (method)
 	{
 	case 1:
-		svm_classifier(train_pic_path, annotation_path, classification_pic_path, predict_anno_path, filename_to_save, filename_to_load);
+	//	svm_classifier(train_pic_path, annotation_path, classification_pic_path, predict_anno_path, filename_to_save, filename_to_load);
+		svm_classifier(train_pic_path, annotation_path, filename_to_save);
 		break;
 	case 2:
 		boost_classifier(train_pic_path, annotation_path, classification_pic_path, predict_anno_path, filename_to_save, filename_to_load);
